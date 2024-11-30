@@ -1,0 +1,122 @@
+{{ if .Params.blueskythread | default false }}
+
+<section class="prose max-w-full flex-row dark:prose-invert">
+<div class="min-h-0 min-w-0 max-w-prose grow max-w-full">
+  <h2>Comments</h2>
+  <p>
+      You can use your Bluesky account to
+      <a href="http://bsky.app/profile/mattdyson.org/post/{{ .Params.blueskythread }}" target="_blank">reply</a>
+      to this post.
+  </p>
+  <div id="bluesky-comments-list"></div>
+  <noscript>You need JavaScript to view the comments.</noscript>
+  <script type="text/javascript">
+
+  // Adapted from https://www.menzel.it/post/2024/11/set-comments-experience-bluesky-posts/
+
+  document.addEventListener("DOMContentLoaded", function () {
+      const commentList = document.getElementById('bluesky-comments-list');
+      commentList.innerHTML = "Loading comments...";
+
+      fetch(`https://public.api.bsky.app/xrpc/app.bsky.feed.getPostThread?uri=at://mattdyson.org/app.bsky.feed.post/{{ .Params.blueskythread }}&depth=10`)
+          .then(response => response.json())
+          .then(data => {
+              const replies = data.thread.replies || [];
+              replies.sort((a, b) => new Date(a.post.record.createdAt) - new Date(b.post.record.createdAt)); // Sort by date
+
+              commentList.innerHTML = ""; // Clear loading text
+
+              const renderComments = (comments, parentElement) => {
+                  comments.forEach(reply => {
+                      const author = reply.post.author;
+                      const content = reply.post.record.text;
+                      const createdAt = new Date(reply.post.record.createdAt).toLocaleString(window.navigator.language);
+                      const replyCount = reply.post.replyCount;
+                      const repostCount = reply.post.repostCount;
+                      const likeCount = reply.post.likeCount;
+                      const quoteCount = reply.post.quoteCount;
+
+                      // Function to convert plain text URLs into clickable links
+                      const makeLinksClickable = (text) => {
+                          const urlRegex = /(https?:\/\/[^\s]+)/g;
+                          return text.replace(urlRegex, (url) => {
+                              return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+                          });
+                      };
+
+                      // Generate a bsky.app URL to a specific post
+                      const generatePostURL = (obj) => {
+                          const author = obj.post.author.did;
+                          const post = obj.post.uri.split("/").slice(-1)[0];
+                          return `http://bsky.app/profile/${author}/post/${post}`;
+                      };
+
+                      const safeContent = makeLinksClickable(content);
+                      const postLink = generatePostURL(reply);
+
+                      // Adapted from https://github.com/nsideras/bluesky-js-comments
+                      const commentHtml = `
+                      <div class="comment-container">
+                          <img src="${author.avatar}" alt="${author.displayName}'s avatar" class="comment-avatar">
+                          <div class="comment-details">
+                              <div class="comment-header">
+                                  ${author.displayName} <span><a href="http://bsky.app/profile/${author.handle}" target="_blank" class="not-prose">@${author.handle}</a></span>
+                              </div>
+                              <div class="comment-text">${safeContent}</div>
+                              <div class="comment-interactions">
+                                  <span class="comment-interactions-icon" title="${replyCount} replies">
+                                  <svg xmlns="http://www.w3.org/2000/svg">
+                                      <path d="M11 16.517c4.418 0 8-3.284 8-7.017S15.418 3 11 3S3 6.026 3 9.759c0 1.457.546 2.807 1.475 3.91L3.5 18.25l3.916-2.447a9.2 9.2 0 0 0 3.584.714" />
+                                  </svg> ${replyCount}
+                                  </span>
+
+                                  <span class="comment-interactions-icon" title="${repostCount} reposts">
+                                  <svg xmlns="http://www.w3.org/2000/svg">
+                                      <g fill-rule="evenodd">
+                                          <path d="m13.5 13.5l3 3l3-3" />
+                                          <path d="M9.5 4.5h3a4 4 0 0 1 4 4v8m-9-9l-3-3l-3 3" />
+                                          <path d="M11.5 16.5h-3a4 4 0 0 1-4-4v-8" />
+                                      </g>
+                                  </svg> ${repostCount}
+                                  </span>
+
+                                  <span class="comment-interactions-icon" title="${likeCount} likes">
+                                  <svg xmlns="http://www.w3.org/2000/svg">
+                                      <path d="M10.5 6.5c.5-2.5 4.343-2.657 6-1c1.603 1.603 1.5 4.334 0 6l-6 6l-6-6a4.243 4.243 0 0 1 0-6c1.55-1.55 5.5-1.5 6 1" />
+                                  </svg> ${likeCount}
+                                  </span>
+
+                              </div>
+
+                              <div class="comment-timestamp"><a href="${postLink}" target="_blank" class="not-prose">${createdAt}</a></div>
+                          </div>
+                      </div>
+                  `;
+
+                      const commentElement = document.createElement("div");
+                      commentElement.classList.add("comment");
+                      commentElement.innerHTML = commentHtml; // Ensure this uses innerHTML to render the clickable links
+                      parentElement.appendChild(commentElement);
+
+                      // If there are child replies, render them recursively
+                      if (reply.replies && reply.replies.length > 0) {
+                          const childContainer = document.createElement("div");
+                          childContainer.classList.add("child-comments");
+                          commentElement.appendChild(childContainer);
+                          renderComments(reply.replies, childContainer);
+                      }
+                  });
+              };
+
+              renderComments(replies, commentList);
+          })
+          .catch(error => {
+              console.error('Error fetching comments:', error);
+              commentList.innerHTML = "<p>Error loading comments.</p>";
+          });
+  });
+</script>
+</div>
+</section>
+
+{{ end }}
